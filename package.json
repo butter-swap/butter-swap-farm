@@ -1,0 +1,29 @@
+{
+  "name": "butter-farm",
+  "version": "1.0.0",
+  "description": "butter farm",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "truffle test"
+  },
+  "keywords": [
+    "butter"
+  ],
+  "author": "BitupLabs",
+  "license": "MIT",
+  "dependencies": {
+    "@openzeppelin/test-helpers": "^0.5.10",
+    "truffle": "^5.3.1"
+  },
+  "devDependencies": {
+    "@truffle/hdwallet-provider": "1.2.3",
+    "chai": "^4.3.4",
+    "ethers": "^5.1.0",
+    "solidity-coverage": "^0.7.16",
+    "truffle-plugin-verify": "^0.5.7",
+    "web3": "^1.3.5"
+  }
+}

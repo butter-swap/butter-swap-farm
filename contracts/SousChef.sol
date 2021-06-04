@@ -168,15 +168,10 @@ contract SousChef is Ownable {
     // Withdraw without caring about rewards. EMERGENCY ONLY.
     function emergencyWithdraw() public {
         UserInfo storage user = userInfo[msg.sender];
-        cream.safeTransfer(address(msg.sender), user.amount);
+        uint256 amount = user.amount;
         user.amount = 0;
         user.rewardDebt = 0;
-        emit EmergencyWithdraw(msg.sender, user.amount);
-    }
-
-    // Withdraw reward. EMERGENCY ONLY.
-    function emergencyRewardWithdraw(uint256 _amount) public onlyOwner {
-        require(_amount <= rewardToken.balanceOf(address(this)), 'not enough token');
-        rewardToken.safeTransfer(address(msg.sender), _amount);
+        cream.safeTransfer(address(msg.sender), amount);
+        emit EmergencyWithdraw(msg.sender, amount);
     }
 }

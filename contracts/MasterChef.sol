@@ -68,12 +68,14 @@ contract MasterChef is Ownable {
     // Butter tokens created per block.
     uint256 public butterPerBlock;
     // Bonus muliplier for early butter makers.
-    uint256 public BONUS_MULTIPLIER = 1;
+    uint256 public bonusMultiplier = 1;
     // The migrator contract. It has a lot of power. Can only be set through governance (owner).
     IMigratorChef public migrator;
 
     // Info of each pool.
     PoolInfo[] public poolInfo;
+    // used to help check whether pool already exists
+    mapping (address => bool) public poolDup;
     // Info of each user that stakes LP tokens.
     mapping (uint256 => mapping (address => UserInfo)) public userInfo;
     // Total allocation points. Must be the sum of all allocation points in all pools.
@@ -92,6 +94,8 @@ contract MasterChef is Ownable {
         uint256 _butterPerBlock,
         uint256 _startBlock
     ) public {
+        require(_devaddr != address(0), "dev _devaddr is zero address");
+
         butter = _butter;
         cream = _cream;
         devaddr = _devaddr;
@@ -110,8 +114,13 @@ contract MasterChef is Ownable {
 
     }
 
+    modifier validatePoolByPid(uint256 _pid) {
+        require(_pid < poolInfo.length, "pool does not exist");
+        _;
+    }
+
     function updateMultiplier(uint256 multiplierNumber) public onlyOwner {
-        BONUS_MULTIPLIER = multiplierNumber;
+        bonusMultiplier = multiplierNumber;
         massUpdatePools();
     }
 
@@ -122,6 +131,8 @@ contract MasterChef is Ownable {
     // Add a new lp to the pool. Can only be called by the owner.
     // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
     function add(uint256 _allocPoint, IHRC20 _lpToken, bool _withUpdate) public onlyOwner {
+        require(poolDup[address(_lpToken)] == false, "add: lp token already exists");
+
         if (_withUpdate) {
             massUpdatePools();
         }
@@ -133,11 +144,12 @@ contract MasterChef is Ownable {
             lastRewardBlock: lastRewardBlock,
             accButterPerShare: 0
         }));
+        poolDup[address(_lpToken)] = true;
         updateStakingPool();
     }
 
     // Update the given pool's Butter allocation point. Can only be called by the owner.
-    function set(uint256 _pid, uint256 _allocPoint, bool _withUpdate) public onlyOwner {
+    function set(uint256 _pid, uint256 _allocPoint, bool _withUpdate) public onlyOwner validatePoolByPid(_pid) {
         if (_withUpdate) {
             massUpdatePools();
         }
@@ -168,7 +180,7 @@ contract MasterChef is Ownable {
     }
 
     // Migrate lp token to another lp contract. Can be called by anyone. We trust that migrator contract is good.
-    function migrate(uint256 _pid) public {
+    function migrate(uint256 _pid) public validatePoolByPid(_pid) {
         require(address(migrator) != address(0), "migrate: no migrator");
         PoolInfo storage pool = poolInfo[_pid];
         IHRC20 lpToken = pool.lpToken;
@@ -181,11 +193,11 @@ contract MasterChef is Ownable {
 
     // Return reward multiplier over the given _from to _to block.
     function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
-        return _to.sub(_from).mul(BONUS_MULTIPLIER);
+        return _to.sub(_from).mul(bonusMultiplier);
     }
 
     // View function to see pending Butters on frontend.
-    function pendingButter(uint256 _pid, address _user) external view returns (uint256) {
+    function pendingButter(uint256 _pid, address _user) external view validatePoolByPid(_pid) returns (uint256) {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accButterPerShare = pool.accButterPerShare;
@@ -206,7 +218,7 @@ contract MasterChef is Ownable {
         }
     }
 
-    function updatePool(uint256 _pid) public {
+    function updatePool(uint256 _pid) public validatePoolByPid(_pid) {
         PoolInfo storage pool = poolInfo[_pid];
         if (block.number <= pool.lastRewardBlock) {
             return;
@@ -225,29 +237,35 @@ contract MasterChef is Ownable {
     }
 
     // Deposit LP tokens to MasterChef for Butter allocation.
-    function deposit(uint256 _pid, uint256 _amount) public {
+    function deposit(uint256 _pid, uint256 _amount) public validatePoolByPid(_pid) {
 
         require (_pid != 0, 'deposit Butter by staking');
 
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         updatePool(_pid);
+
+        uint256 pending = 0;
         if (user.amount > 0) {
-            uint256 pending = user.amount.mul(pool.accButterPerShare).div(1e12).sub(user.rewardDebt);
-            if(pending > 0) {
-                safeButterTransfer(msg.sender, pending);
-            }
+            pending = user.amount.mul(pool.accButterPerShare).div(1e12).sub(user.rewardDebt);
         }
         if (_amount > 0) {
-            pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
             user.amount = user.amount.add(_amount);
         }
         user.rewardDebt = user.amount.mul(pool.accButterPerShare).div(1e12);
+
+        if(pending > 0) {
+            safeButterTransfer(msg.sender, pending);
+        }
+        if (_amount > 0) {
+            pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
+        }
+
         emit Deposit(msg.sender, _pid, _amount);
     }
 
     // Withdraw LP tokens from MasterChef.
-    function withdraw(uint256 _pid, uint256 _amount) public {
+    function withdraw(uint256 _pid, uint256 _amount) public validatePoolByPid(_pid) {
 
         require (_pid != 0, 'withdraw Butter by unstaking');
         PoolInfo storage pool = poolInfo[_pid];
@@ -256,14 +274,17 @@ contract MasterChef is Ownable {
 
         updatePool(_pid);
         uint256 pending = user.amount.mul(pool.accButterPerShare).div(1e12).sub(user.rewardDebt);
+        if(_amount > 0) {
+            user.amount = user.amount.sub(_amount);
+        }
+        user.rewardDebt = user.amount.mul(pool.accButterPerShare).div(1e12);
+
         if(pending > 0) {
             safeButterTransfer(msg.sender, pending);
         }
         if(_amount > 0) {
-            user.amount = user.amount.sub(_amount);
             pool.lpToken.safeTransfer(address(msg.sender), _amount);
         }
-        user.rewardDebt = user.amount.mul(pool.accButterPerShare).div(1e12);
         emit Withdraw(msg.sender, _pid, _amount);
     }
 
@@ -272,18 +293,22 @@ contract MasterChef is Ownable {
         PoolInfo storage pool = poolInfo[0];
         UserInfo storage user = userInfo[0][msg.sender];
         updatePool(0);
+
+        uint256 pending = 0;
         if (user.amount > 0) {
-            uint256 pending = user.amount.mul(pool.accButterPerShare).div(1e12).sub(user.rewardDebt);
-            if(pending > 0) {
-                safeButterTransfer(msg.sender, pending);
-            }
+            pending = user.amount.mul(pool.accButterPerShare).div(1e12).sub(user.rewardDebt);
         }
         if(_amount > 0) {
-            pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
             user.amount = user.amount.add(_amount);
         }
         user.rewardDebt = user.amount.mul(pool.accButterPerShare).div(1e12);
 
+        if(pending > 0) {
+            safeButterTransfer(msg.sender, pending);
+        }
+        if(_amount > 0) {
+            pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
+        }
         cream.mint(msg.sender, _amount);
         emit Deposit(msg.sender, 0, _amount);
     }
@@ -295,21 +320,23 @@ contract MasterChef is Ownable {
         require(user.amount >= _amount, "withdraw: not good");
         updatePool(0);
         uint256 pending = user.amount.mul(pool.accButterPerShare).div(1e12).sub(user.rewardDebt);
+        if(_amount > 0) {
+            user.amount = user.amount.sub(_amount);
+        }
+        user.rewardDebt = user.amount.mul(pool.accButterPerShare).div(1e12);
+
         if(pending > 0) {
             safeButterTransfer(msg.sender, pending);
         }
         if(_amount > 0) {
-            user.amount = user.amount.sub(_amount);
             pool.lpToken.safeTransfer(address(msg.sender), _amount);
         }
-        user.rewardDebt = user.amount.mul(pool.accButterPerShare).div(1e12);
-
         cream.burn(msg.sender, _amount);
         emit Withdraw(msg.sender, 0, _amount);
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw(uint256 _pid) public {
+    function emergencyWithdraw(uint256 _pid) public validatePoolByPid(_pid) {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         uint256 amount = user.amount;
@@ -327,6 +354,7 @@ contract MasterChef is Ownable {
     // Update dev address by the previous dev.
     function dev(address _devaddr) public {
         require(msg.sender == devaddr, "dev: wut?");
+        require(_devaddr != address(0), "dev _devaddr is zero address");
         devaddr = _devaddr;
     }
 }

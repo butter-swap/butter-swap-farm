@@ -24,6 +24,19 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
         await this.lp3.transfer(alice, '2000', { from: minter });
     });
 
+    it('add same lp token should fail', async () => {
+        await this.chef.add('2000', this.lp1.address, true, { from: minter });
+        await expectRevert(this.chef.add('100', this.lp1.address, true, { from: minter }), 'add: lp token already exists');
+        await this.chef.add('1000', this.lp2.address, true, { from: minter });
+        await this.chef.add('500', this.lp3.address, true, { from: minter });
+        await expectRevert(this.chef.add('100', this.lp2.address, true, { from: minter }), 'add: lp token already exists');
+
+        await this.chef.set(3, '100', true, { from: minter })
+        await expectRevert(this.chef.set(4, '100', true, { from: minter }), 'pool does not exist');
+
+        assert.equal((await this.chef.poolLength()).toString(), "4");
+    });
+
     it('real case', async () => {
         this.lp4 = await MockHRC20.new('LPToken', 'LP1', '1000000', { from: minter });
         this.lp5 = await MockHRC20.new('LPToken', 'LP2', '1000000', { from: minter });
@@ -34,12 +47,12 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
         await this.chef.add('2000', this.lp1.address, true, { from: minter });
         await this.chef.add('1000', this.lp2.address, true, { from: minter });
         await this.chef.add('500', this.lp3.address, true, { from: minter });
-        await this.chef.add('500', this.lp3.address, true, { from: minter });
-        await this.chef.add('500', this.lp3.address, true, { from: minter });
-        await this.chef.add('500', this.lp3.address, true, { from: minter });
-        await this.chef.add('500', this.lp3.address, true, { from: minter });
-        await this.chef.add('100', this.lp3.address, true, { from: minter });
-        await this.chef.add('100', this.lp3.address, true, { from: minter });
+        await this.chef.add('500', this.lp4.address, true, { from: minter });
+        await this.chef.add('500', this.lp5.address, true, { from: minter });
+        await this.chef.add('500', this.lp6.address, true, { from: minter });
+        await this.chef.add('500', this.lp7.address, true, { from: minter });
+        await this.chef.add('100', this.lp8.address, true, { from: minter });
+        await this.chef.add('100', this.lp9.address, true, { from: minter });
         assert.equal((await this.chef.poolLength()).toString(), "10");
 
         // await time.advanceBlockTo('170');
@@ -62,8 +75,7 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
         await this.chef.enterStaking('0', { from: alice });
         assert.equal((await this.butter.balanceOf(alice)).toString(), '993');
         // assert.equal((await this.chef.getPoolPoint(0, { from: minter })).toString(), '1900');
-    })
-
+    });
 
     it('deposit/withdraw', async () => {
         await this.chef.add('1000', this.lp1.address, true, { from: minter });
@@ -89,7 +101,7 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
         assert.equal((await this.butter.balanceOf(bob)).toString(), '125');
         await this.chef.emergencyWithdraw(1, { from: bob });
         assert.equal((await this.lp1.balanceOf(bob)).toString(), '2000');
-    })
+    });
 
     it('staking/unstaking', async () => {
         await this.chef.add('1000', this.lp1.address, true, { from: minter });
@@ -107,14 +119,13 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
         await this.chef.enterStaking('10', { from: alice }); //4
         assert.equal((await this.cream.balanceOf(alice)).toString(), '250');
         assert.equal((await this.butter.balanceOf(alice)).toString(), '249');
-        await this.chef.leaveStaking(250);
+        await this.chef.leaveStaking('250', { from: alice });
         assert.equal((await this.cream.balanceOf(alice)).toString(), '0');
         assert.equal((await this.butter.balanceOf(alice)).toString(), '749');
 
     });
 
-
-    it('updaate multiplier', async () => {
+    it('update multiplier', async () => {
         await this.chef.add('1000', this.lp1.address, true, { from: minter });
         await this.chef.add('1000', this.lp2.address, true, { from: minter });
         await this.chef.add('1000', this.lp3.address, true, { from: minter });
@@ -165,5 +176,5 @@ contract('MasterChef', ([alice, bob, carol, dev, minter]) => {
         assert.equal((await this.chef.devaddr()).valueOf(), bob);
         await this.chef.dev(alice, { from: bob });
         assert.equal((await this.chef.devaddr()).valueOf(), alice);
-    })
+    });
 });

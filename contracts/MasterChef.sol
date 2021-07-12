@@ -68,7 +68,7 @@ contract MasterChef is Ownable {
     // Butter tokens created per block.
     uint256 public butterPerBlock;
     // Bonus muliplier for early butter makers.
-    uint256 public bonusMultiplier = 1;
+    uint256 public bonusMultiplier = 240;
     // The migrator contract. It has a lot of power. Can only be set through governance (owner).
     IMigratorChef public migrator;
 
@@ -120,6 +120,9 @@ contract MasterChef is Ownable {
     }
 
     function updateMultiplier(uint256 multiplierNumber) public onlyOwner {
+        // initial lastMultiplierNumber is 480
+        require(multiplierNumber < bonusMultiplier, "multiplierNumber should always be smaller");
+
         bonusMultiplier = multiplierNumber;
         massUpdatePools();
     }

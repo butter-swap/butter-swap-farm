@@ -61,7 +61,7 @@ contract ButterDao is Ownable {
         conditionTurnOn = _turnOnCondition;
     }
 
-    function switchCondition(bool _turnOn) public onlyOwner {
+    function switchCondition(bool _turnOn) external onlyOwner {
         conditionTurnOn = _turnOn;
     }
 
@@ -73,11 +73,11 @@ contract ButterDao is Ownable {
     }
 
     // Stake Cream tokens for dao token
-    function enterStake(uint256 _amount) public {
+    function enterStake(uint256 _amount) external {
         require(_amount > 0, "enterStake: amount should be large than 0");
 
         // if already dao member, directly add amount
-        if (daoMembers[msg.sender] == true) {
+        if (daoMembers[msg.sender]) {
             UserInfo storage user = userInfo[msg.sender];
             user.amount = user.amount.add(_amount);
 
@@ -116,9 +116,9 @@ contract ButterDao is Ownable {
     }
 
     // Withdraw Cream tokens from STAKING.
-    function leaveStake() public {
+    function leaveStake() external {
         require(
-            daoMembers[msg.sender] == true,
+            daoMembers[msg.sender],
             "leaveStake: you are not dao member"
         );
 
@@ -178,7 +178,7 @@ contract ButterDao is Ownable {
 
     // precheck before leave STAKING.
     function leaveStakePrecheck() external view returns (bool) {
-        if (daoMembers[msg.sender] == false) {
+        if (!daoMembers[msg.sender]) {
             return false;
         }
 
@@ -231,7 +231,7 @@ contract ButterDao is Ownable {
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw(uint256 _amount) public {
+    function emergencyWithdraw(uint256 _amount) external {
         UserInfo storage user = userInfo[msg.sender];
         require(user.amount > 0, "emergencyWithdraw: staked balance zero");
         require(

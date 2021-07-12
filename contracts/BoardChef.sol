@@ -76,12 +76,12 @@ contract BoardChef is Ownable {
         });
     }
 
-    function stopReward() public onlyOwner {
+    function stopReward() external onlyOwner {
         bonusEndBlock = block.number;
     }
 
     // Return reward multiplier over the given _from to _to block.
-    function getMultiplier(uint256 _from, uint256 _to) public view returns (uint256) {
+    function getMultiplier(uint256 _from, uint256 _to) internal view returns (uint256) {
         if (_to <= bonusEndBlock) {
             return _to.sub(_from);
         } else if (_from >= bonusEndBlock) {
@@ -122,7 +122,7 @@ contract BoardChef is Ownable {
     }
 
     // Stake board tokens to BoardChef for Reward allocation
-    function deposit(uint256 _amount) public {
+    function deposit(uint256 _amount) external {
         require (_amount >= 0, 'amount less than 0');
         UserInfo storage user = userInfo[msg.sender];
         updatePool();
@@ -146,7 +146,7 @@ contract BoardChef is Ownable {
     }
 
     // Withdraw board tokens from STAKING.
-    function withdraw(uint256 _amount) public {
+    function withdraw(uint256 _amount) external {
         require (_amount >= 0, 'amount less than 0');
         UserInfo storage user = userInfo[msg.sender];
         require(user.amount >= _amount, "withdraw: not enough");
@@ -168,7 +168,7 @@ contract BoardChef is Ownable {
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw() public {
+    function emergencyWithdraw() external {
         UserInfo storage user = userInfo[msg.sender];
         uint256 amount = user.amount;
         user.amount = 0;
@@ -178,7 +178,7 @@ contract BoardChef is Ownable {
     }
 
     // Withdraw reward. EMERGENCY ONLY.
-    function emergencyRewardWithdraw(uint256 _amount) public onlyOwner {
+    function emergencyRewardWithdraw(uint256 _amount) external onlyOwner {
         require(_amount <= rewardToken.balanceOf(address(this)), 'not enough token');
         rewardToken.safeTransfer(address(msg.sender), _amount);
     }

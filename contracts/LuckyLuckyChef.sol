@@ -163,22 +163,22 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
     }
 
     // set Admin address
-    function setAdmin(address _admin) public onlyOwner(){
+    function setAdmin(address _admin) external onlyOwner(){
         admin = _admin;
     }
 
     // update the reward token amount for every period
-    function updateRewardPerPeriod(uint256 _rewardPerPeriod) public onlyOwner(){
+    function updateRewardPerPeriod(uint256 _rewardPerPeriod) external onlyOwner(){
         rewardPerPeriod = _rewardPerPeriod;
     }
 
     // withdraw some token to owner
-    function withdrawRewardToken(uint256 _amount) public onlyOwner(){
+    function withdrawRewardToken(uint256 _amount) external onlyOwner(){
         rewardToken.safeTransfer(msg.sender, _amount);
     }
 
     // 获取luckylucky的总历史期数
-    function getTotalLuckyLuckys() public view returns(uint256 times){
+    function getTotalLuckyLuckys() external view returns(uint256 times){
         times = luckyIdCounter_;
     }
 
@@ -210,7 +210,7 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
      */
 
     // start a new lucky lucky
-    function startNewLucky(uint256 _endBlock) public onlyAdmin()
+    function startNewLucky(uint256 _endBlock) external onlyAdmin()
     {
         require(status == Status.Completed, "The last luckylucky has not finished");
         require(rewardPerPeriod > 0, "The reward cannot be 0");
@@ -223,7 +223,7 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
     }
 
     // original get random , seems vrf not supporting heco-chain now :(
-    function finishLuckyInternal() public onlyAdmin(){
+    function finishLuckyInternal() external onlyAdmin(){
         require(status == Status.Open, "status invalid");
         require(block.number > endBlock, "lucky not finished");
         address luckyAddress = getLuckyAddressInternal();
@@ -271,7 +271,7 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
     }
 
     // end a lucky lucky , pick a lucky address to win @rewardPerPeriod rewardTokens
-    function finishLucky(uint256 _seed) public onlyAdmin(){
+    function finishLucky(uint256 _seed) external onlyAdmin(){
         require(status == Status.Open, "status invalid");
         require(block.number > endBlock, "lucky not finished");
         uint256 totalPower = getTotalPower();
@@ -347,7 +347,7 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
     }
 
     // Stake Board tokens to luckyluckyChef to win rewardPerPeriod tokens
-    function deposit(uint256 _amount) public {
+    function deposit(uint256 _amount) external {
         require (_amount >= 0, 'amount less than 0');
         require (status == Status.Open, "luckylucky is not open");
         require (block.number >= startBlock, "luckylucky start block not reached");
@@ -356,7 +356,7 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
 
         if (_amount > 0) {
             user.amount = user.amount.add(_amount);
-            user.power = user.power + _amount.mul(endBlock.sub(block.number));
+            user.power = user.power.add(_amount.mul(endBlock.sub(block.number)));
             if(!user.init){
                userAddresses.push(msg.sender);
             }
@@ -370,7 +370,7 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
     }
 
     // Withdraw Cream tokens from STAKING.
-    function withdraw(uint256 _amount) public {
+    function withdraw(uint256 _amount) external {
         require (_amount >= 0, 'amount less than 0');
         UserInfo storage user = userInfo[msg.sender];
         require(user.amount >= _amount, "withdraw: not enough");
@@ -378,7 +378,7 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
         if(_amount > 0) {
             uint256 formerAmount = user.amount;
             user.amount = user.amount.sub(_amount);
-            user.power = user.power.div(formerAmount).mul(user.amount);
+            user.power = user.power.mul(user.amount).div(formerAmount);
         }
         
         if(_amount > 0) {

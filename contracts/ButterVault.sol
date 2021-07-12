@@ -71,6 +71,12 @@ contract ButterVault is Ownable, Pausable {
         address _admin,
         address _treasury
     ) public {
+        require(address(_token) != address(0), "_token address cannot be 0");
+        require(address(_receiptToken) != address(0), "_receiptToken address cannot be 0");
+        require(address(_masterchef) != address(0), "_masterchef address cannot be 0");
+        require(address(_butterDao) != address(0), "_butterDao address cannot be 0");
+        require(_admin != address(0), "_admin address cannot be 0");
+        require(_treasury != address(0), "_treasury address cannot be 0");
         token = _token;
         receiptToken = _receiptToken;
         masterchef = _masterchef;

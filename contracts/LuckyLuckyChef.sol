@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-
+import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
 pragma solidity 0.6.12;
 
 import './libs/math/SafeMath.sol';
@@ -33,6 +33,10 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
     // reward per peroid.
     uint256 public rewardPerPeriod;
 
+    // price feed
+    AggregatorV3Interface internal priceFeedHT;
+    AggregatorV3Interface internal priceFeedETH;
+    AggregatorV3Interface internal priceFeedBTC;
     // Info of each user that stakes Board tokens.
     mapping (address => UserInfo) public userInfo;
 
@@ -145,6 +149,9 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
         rewardToken = _rewardToken;
         status = Status.Completed;
         admin = _admin;
+        priceFeedBTC = AggregatorV3Interface(0xD5c40f5144848Bd4EF08a9605d860e727b991513);
+        priceFeedHT = AggregatorV3Interface(0x8EC213E7191488C7873cEC6daC8e97cdbAdb7B35);
+        priceFeedETH = AggregatorV3Interface(0x5Fa530068e0F5046479c588775c157930EF0Dff0);
     }
 
     // for vrf reserved, expecting support heco-chain :(
@@ -247,6 +254,39 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
         emit LuckyCompleted(luckyId, rewardPerPeriod, luckyAddress);
     }
 
+    function getThePriceBTC() internal view returns (int) {
+        (
+            uint80 roundID, 
+            int price,
+            uint startedAt,
+            uint timeStamp,
+            uint80 answeredInRound
+        ) = priceFeedBTC.latestRoundData();
+        return price;
+    }
+
+    function getThePriceHT() internal view returns (int) {
+        (
+            uint80 roundID, 
+            int price,
+            uint startedAt,
+            uint timeStamp,
+            uint80 answeredInRound
+        ) = priceFeedHT.latestRoundData();
+        return price;
+    }
+
+    function getThePriceETH() internal view returns (int) {
+        (
+            uint80 roundID, 
+            int price,
+            uint startedAt,
+            uint timeStamp,
+            uint80 answeredInRound
+        ) = priceFeedETH.latestRoundData();
+        return price;
+    }
+
     // original get random and lucky address , seems vrf not supporting heco-chain now :(
     function getLuckyAddressInternal() internal view returns(address luckyAddress){
         uint256 totalPower = 0;
@@ -255,7 +295,11 @@ contract LuckyLuckyChef is Ownable, ILuckyLucky {
             totalPower = totalPower.add(userInfo[address_].power);
         }
         if(totalPower != 0){
-            uint256 sumLuckyPower = uint256(keccak256(abi.encode(block.timestamp, block.difficulty))) % totalPower;
+            int priceEth = getThePriceETH();
+            int priceBTC = getThePriceBTC();
+            int priceHT = getThePriceHT();
+
+            uint256 sumLuckyPower = uint256(keccak256(abi.encode(block.timestamp, block.difficulty, priceEth, priceBTC, priceHT))) % totalPower;
             uint256 luckyPower = 0;
             for(uint256 i = 0; i < userAddresses.length; i ++ ){
                 address address_ = userAddresses[i];

@@ -6,6 +6,7 @@ import './libs/math/SafeMath.sol';
 import './libs/token/HRC20/IHRC20.sol';
 import './libs/token/HRC20/SafeHRC20.sol';
 import './libs/access/Ownable.sol';
+import './IButterDao.sol';
 
 // deposit board token for other tokens
 contract BoardChef is Ownable {
@@ -39,6 +40,8 @@ contract BoardChef is Ownable {
     IHRC20 public boardToken;
     IHRC20 public rewardToken;
 
+    IButterDao public immutable butterDao;
+
     // reward per block.
     uint256 public rewardPerBlock;
 
@@ -52,6 +55,8 @@ contract BoardChef is Ownable {
     // The block number when reward tokens ends.
     uint256 public bonusEndBlock;
 
+    uint256 public requiredBoardLevel;
+
     event Deposit(address indexed user, uint256 amount);
     event Withdraw(address indexed user, uint256 amount);
     event EmergencyWithdraw(address indexed user, uint256 amount);
@@ -59,6 +64,8 @@ contract BoardChef is Ownable {
     constructor(
         IHRC20 _boardToken,
         IHRC20 _rewardToken,
+        IButterDao _butterDao,
+        uint256 _requiredBoardLevel,
         uint256 _rewardPerBlock,
         uint256 _startBlock,
         uint256 _bonusEndBlock
@@ -68,6 +75,8 @@ contract BoardChef is Ownable {
         rewardPerBlock = _rewardPerBlock;
         startBlock = _startBlock;
         bonusEndBlock = _bonusEndBlock;
+        butterDao = _butterDao;
+        requiredBoardLevel = _requiredBoardLevel;
 
         // staking pool
         poolInfo = PoolInfo({
@@ -124,6 +133,8 @@ contract BoardChef is Ownable {
     // Stake board tokens to BoardChef for Reward allocation
     function deposit(uint256 _amount) external {
         require (_amount >= 0, 'amount less than 0');
+        (uint256 amount, uint256 stakeTs, uint256 boardLevel) = IButterDao(butterDao).userInfo(address(msg.sender));
+        require(boardLevel >= requiredBoardLevel, "required board level not exceed");
         UserInfo storage user = userInfo[msg.sender];
         updatePool();
 

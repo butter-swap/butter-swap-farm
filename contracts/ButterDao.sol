@@ -8,25 +8,26 @@ import "./libs/token/HRC20/SafeHRC20.sol";
 import "./libs/access/Ownable.sol";
 
 import "./ButterToken.sol";
-import "./CreamToken.sol";
 import "./DAOToken.sol";
 import "./BoardToken.sol";
+import "./IMasterChef.sol";
 
 contract ButterDao is Ownable {
     uint256 constant DAY_IN_SECONDS = 86400;
-    uint256 constant WEEK_IN_SECONDS = 604800;
 
     using SafeMath for uint256;
     using SafeHRC20 for IHRC20;
 
     // The Butter TOKEN
     IHRC20 public butter;
-    // The Cream TOKEN
-    IHRC20 public cream;
     // dao token
     DAOToken public daoToken;
     // board token
     BoardToken public boardToken;
+
+    address public treasury;
+
+    IMasterChef public immutable masterchef;
 
     // if conditionTurnOn, when user leave stake, have to check whether staked after seven days and is Sunday
     bool public conditionTurnOn = false;
@@ -34,11 +35,14 @@ contract ButterDao is Ownable {
     uint256 public thresholdDivider = 1000;
 
     struct UserInfo {
-        uint256 amount; // How many Cream tokens the user has provided.
+        uint256 amount; // How many Butter tokens the user has provided.
         uint256 stakeTs; // block timestamp the last time user become board member
+        uint256 boardLevel; // 0: 7 days ; 1: 30 days 2: 90 days 3: 180 days
     }
 
-    // Info of each user that stakes Cream tokens.
+    mapping(uint256 => uint256) boardLevelToPeriod;
+
+    // Info of each user that stakes Butter tokens.
     mapping(address => UserInfo) public userInfo;
     // dao members
     mapping(address => bool) public daoMembers;
@@ -46,19 +50,39 @@ contract ButterDao is Ownable {
     event Deposit(address indexed user, uint256 amount);
     event Withdraw(address indexed user, uint256 amount);
     event EmergencyWithdraw(address indexed user, uint256 amount);
+    event TreasuryAddressChanged(address indexed newAddress);
+    event RewardButterTransferredToTreasury(uint256 amount, address indexed treasury);
 
     constructor(
         ButterToken _butter,
-        CreamToken _cream,
         DAOToken _daoToken,
         BoardToken _boardToken,
+        IMasterChef _masterchef,
+        address _treasury,
         bool _turnOnCondition
     ) public {
+        require(address(_masterchef) != address(0), "_masterchef address cannot be 0");
+        require(address(_butter) != address(0), "_butter address cannot be 0");
+        require(address(_boardToken) != address(0), "_boardToken address cannot be 0");
+        require(address(_daoToken) != address(0), "_daoToken address cannot be 0");
+        require(address(_treasury) != address(0), "_treasury address cannot be 0");
         butter = _butter;
-        cream = _cream;
         daoToken = _daoToken;
         boardToken = _boardToken;
+        masterchef = _masterchef;
+        treasury = _treasury;
         conditionTurnOn = _turnOnCondition;
+        boardLevelToPeriod[0] = 604800;  // 7 days
+        boardLevelToPeriod[1] = 2592000;  // 30 days
+        boardLevelToPeriod[2] = 7776000; // 90 days
+        boardLevelToPeriod[3] = 15552000; // 180 days
+    }
+
+    function setTreasury(address _treasury) external onlyOwner {
+        require(address(_treasury) != address(0), "treasury address cannot be 0");
+        treasury = _treasury;
+
+        emit TreasuryAddressChanged(treasury);
     }
 
     function switchCondition(bool _turnOn) external onlyOwner {
@@ -72,16 +96,40 @@ contract ButterDao is Ownable {
         thresholdDivider = _thresholdDivider;
     }
 
-    // Stake Cream tokens for dao token
+    function stakeToMaster(uint256 _amount) internal{
+        IMasterChef(masterchef).enterStaking(_amount);
+    }
+
+    function leaveFromMaster(uint256 _amount) internal{
+        IMasterChef(masterchef).leaveStaking(_amount);
+    }
+
+    function harvestFromMaster() internal{
+        IMasterChef(masterchef).leaveStaking(0);
+    }
+
+    function totalPendingButter() external view returns(uint256){
+        return butter.balanceOf(address(this)).add(
+            IMasterChef(masterchef).pendingButter(0, address(this)));
+    }
+
+    function upgradeBoardLevel(uint256 newLevel) external {
+        UserInfo storage user = userInfo[msg.sender];
+        require(daoMembers[msg.sender], "require board members");
+        require(newLevel > user.boardLevel, "need to be greater than old level");
+        require(newLevel <= 3, "invalid level");
+        user.boardLevel = newLevel;
+    }
+
+    // Stake Butter tokens for dao and board token
     function enterStake(uint256 _amount) external {
         require(_amount > 0, "enterStake: amount should be large than 0");
-
+        UserInfo storage user = userInfo[msg.sender];
         // if already dao member, directly add amount
         if (daoMembers[msg.sender]) {
-            UserInfo storage user = userInfo[msg.sender];
             user.amount = user.amount.add(_amount);
 
-            cream.safeTransferFrom(address(msg.sender), address(this), _amount);
+            butter.safeTransferFrom(address(msg.sender), address(this), _amount);
             daoToken.mint(msg.sender, _amount);
             boardToken.mint(msg.sender, _amount);
         } else {
@@ -102,20 +150,20 @@ contract ButterDao is Ownable {
                 "enterStake: staked amount should not be less than threshold ratio of total butter valid supply for the first time"
             );
 
-            UserInfo storage user = userInfo[msg.sender];
             user.amount = user.amount.add(_amount);
             user.stakeTs = block.timestamp;
+            user.boardLevel = 0;
             daoMembers[msg.sender] = true;
 
-            cream.safeTransferFrom(address(msg.sender), address(this), _amount);
+            butter.safeTransferFrom(address(msg.sender), address(this), _amount);
             daoToken.mint(msg.sender, _amount);
             boardToken.mint(msg.sender, _amount);
         }
-
+        stakeToMaster(_amount);
         emit Deposit(msg.sender, _amount);
     }
 
-    // Withdraw Cream tokens from STAKING.
+    // Withdraw Butter tokens from STAKING.
     function leaveStake() external {
         require(
             daoMembers[msg.sender],
@@ -137,7 +185,7 @@ contract ButterDao is Ownable {
 
         if (conditionTurnOn) {
             require(
-                block.timestamp - user.stakeTs >= WEEK_IN_SECONDS,
+                block.timestamp - user.stakeTs >= boardLevelToPeriod[user.boardLevel],
                 "leaveStake: leave stake only after seven days"
             );
 
@@ -151,8 +199,8 @@ contract ButterDao is Ownable {
         uint256 userAmount = user.amount;
         user.amount = 0;
         daoMembers[msg.sender] = false;
-
-        safeCreamTransfer(address(msg.sender), userAmount);
+        leaveFromMaster(userAmount);
+        safeButterTransfer(address(msg.sender), userAmount);
         daoToken.burn(msg.sender, userAmount);
         boardToken.burn(msg.sender, userAmount);
 
@@ -197,7 +245,7 @@ contract ButterDao is Ownable {
         }
 
         if (conditionTurnOn) {
-            if (block.timestamp - user.stakeTs < WEEK_IN_SECONDS) {
+            if (block.timestamp - user.stakeTs < boardLevelToPeriod[user.boardLevel]) {
                 return false;
             }
 
@@ -220,13 +268,13 @@ contract ButterDao is Ownable {
         return false;
     }
 
-    // Safe cream transfer function, just in case if rounding error causes pool to not have enough Cream.
-    function safeCreamTransfer(address _to, uint256 _amount) private {
-        uint256 creamBal = cream.balanceOf(address(this));
-        if (_amount > creamBal) {
-            cream.safeTransfer(_to, creamBal);
+    // Safe butter transfer function, just in case if rounding error causes pool to not have enough butter.
+    function safeButterTransfer(address _to, uint256 _amount) private {
+        uint256 butterBal = butter.balanceOf(address(this));
+        if (_amount > butterBal) {
+            butter.safeTransfer(_to, butterBal);
         } else {
-            cream.safeTransfer(_to, _amount);
+            butter.safeTransfer(_to, _amount);
         }
     }
 
@@ -241,7 +289,7 @@ contract ButterDao is Ownable {
 
         if (conditionTurnOn) {
             require(
-                block.timestamp - user.stakeTs >= WEEK_IN_SECONDS,
+                block.timestamp - user.stakeTs >= boardLevelToPeriod[user.boardLevel],
                 "emergencyWithdraw: leave stake only after seven days"
             );
 
@@ -254,11 +302,23 @@ contract ButterDao is Ownable {
 
         user.amount = user.amount.sub(_amount);
         daoMembers[msg.sender] = false;
-
-        safeCreamTransfer(address(msg.sender), _amount);
+        leaveFromMaster(_amount);
+        safeButterTransfer(address(msg.sender), _amount);
         daoToken.burn(msg.sender, _amount);
         boardToken.burn(msg.sender, _amount);
 
         emit EmergencyWithdraw(msg.sender, _amount);
+    }
+
+    // transfer staking reward butter to treasury
+    // and these rewards should be made to a board pool's reward
+    function transferRewardButterToTreasury() onlyOwner external{
+        harvestFromMaster();
+        uint256 balance = butter.balanceOf(address(this));
+        if(balance > 0){
+            butter.safeTransfer(treasury, balance);
+        }
+
+        emit RewardButterTransferredToTreasury(balance, treasury);
     }
 }

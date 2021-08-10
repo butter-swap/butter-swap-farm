@@ -70,6 +70,8 @@ contract BoardChef is Ownable {
         uint256 _startBlock,
         uint256 _bonusEndBlock
     ) public {
+        require(_startBlock < _bonusEndBlock && _startBlock < block.number.add(864000), 
+            "startBlock or bonusEndBlock invalid");
         boardToken = _boardToken;
         rewardToken = _rewardToken;
         rewardPerBlock = _rewardPerBlock;

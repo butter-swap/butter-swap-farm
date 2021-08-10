@@ -29,7 +29,7 @@ contract ButterDao is Ownable {
 
     IMasterChef public immutable masterchef;
 
-    // if conditionTurnOn, when user leave stake, have to check whether staked after seven days and is Sunday
+    // if conditionTurnOn, when user leave stake, have to check whether staked after locking period and is Sunday
     bool public conditionTurnOn = false;
     // threshold ratio
     uint256 public thresholdDivider = 1000;
@@ -186,13 +186,13 @@ contract ButterDao is Ownable {
         if (conditionTurnOn) {
             require(
                 block.timestamp - user.stakeTs >= boardLevelToPeriod[user.boardLevel],
-                "leaveStake: leave stake only after seven days"
+                "leaveStake: leave stake only after locking period"
             );
 
             // check sunday
             require(
                 isSunday(block.timestamp),
-                "leaveStake: leave stake only when Sunday(UTC+8)"
+                "leaveStake: leave stake only on Sunday(UTC+8)"
             );
         }
 

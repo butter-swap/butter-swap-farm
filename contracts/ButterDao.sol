@@ -290,13 +290,13 @@ contract ButterDao is Ownable {
         if (conditionTurnOn) {
             require(
                 block.timestamp - user.stakeTs >= boardLevelToPeriod[user.boardLevel],
-                "emergencyWithdraw: leave stake only after seven days"
+                "emergencyWithdraw: leave stake only after locking period"
             );
 
             // check sunday
             require(
                 isSunday(block.timestamp),
-                "emergencyWithdraw: leave stake only when Sunday(UTC+8)"
+                "emergencyWithdraw: leave stake only on Sunday(UTC+8)"
             );
         }
 

@@ -76,6 +76,9 @@ contract ButterDao is Ownable {
         boardLevelToPeriod[1] = 2592000;  // 30 days
         boardLevelToPeriod[2] = 7776000; // 90 days
         boardLevelToPeriod[3] = 15552000; // 180 days
+
+        // Infinite approve
+        IHRC20(_butter).safeApprove(address(_masterchef), uint256(-1));
     }
 
     function setTreasury(address _treasury) external onlyOwner {
